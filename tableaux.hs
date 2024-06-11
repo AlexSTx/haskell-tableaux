@@ -1,8 +1,7 @@
 import Data.Char (isAlpha, isSpace)
 import Data.List (find, isPrefixOf, stripPrefix)
-import Debug.Trace
 import Language.Haskell.TH.Ppr (hashParens)
-import System.Console.Terminfo (restoreDefaultColors)
+
 
 operators :: [String]
 operators = ["&", "|", "~", "->", "<->"]
@@ -19,7 +18,6 @@ data Node
 trimm :: String -> String
 trimm = filter (not . isSpace)
 
--- TODO: create guard function for this
 takeRestAfterParens' :: String -> Int -> String
 takeRestAfterParens' string level
   | null string = ""
@@ -114,50 +112,102 @@ printSyntaxTree (Leaf operand hasParens)
   | hasParens = "(" ++ operand ++ ")"
   | not hasParens = operand
 
+negateNode :: Node -> Node
+negateNode (BinaryOperation operator operand1 operand2 hasParens) = UnaryOperation "~" (BinaryOperation operator operand1 operand2 True) False
+negateNode (UnaryOperation operator operand hasParens) = operand -- can do that because negation is the only unary operation
+negateNode (Leaf operand hasParens) = UnaryOperation "~" (Leaf operand hasParens) False
+
+xor :: Bool -> Bool -> Bool
+xor p q = (p && not q) || (not p && q)
+
+-- type IsNegated = Bool
+
+-- data LogicNode
+--   = LogicOperation Operator Node Node HasParens IsNegated
+--   | LogicLeaf String HasParens IsNegated
+
+-- convertToLogicTree :: Node -> IsNegated -> LogicNode
+-- convertToLogicTree (Leaf operand hasParens) isNegated = LogicLeaf operand hasParens (xor False isNegated)
+-- convertToLogicTree (BinaryOperation operator operand1 operand2 hasParens) isNegated = LogicOperation operator operand1 operand2 hasParens (xor False isNegated)
+-- convertToLogicTree (UnaryOperation operator operand hasParens) isNegated = convertToLogicTree operand (xor True isNegated)
+
+-- caralho :: Bool -> Node -> Maybe Node -> Node
+-- caralho taNegado node resto =
+
+data Caralho = NodeC Node (Maybe Caralho) (Maybe Caralho) (Maybe Caralho) (Maybe Caralho)
+
+createRefutationTree :: Node -> Bool -> Maybe Caralho
+createRefutationTree (UnaryOperation operator operand hasParens) hasNot = createRefutationTree operand (xor True hasNot) 
+
+createRefutationTree (Leaf operand hasParens) hasNot
+  | hasNot = Just (NodeC (negateNode (Leaf operand hasParens)) Nothing Nothing Nothing Nothing)
+  | not hasNot = Just (NodeC (Leaf operand hasParens) Nothing Nothing Nothing Nothing)
+createRefutationTree (BinaryOperation operator operand1 operand2 hasParens) hasNot
+  | hasNot = case operator of
+      "->" -> Just (NodeC (negateNode (BinaryOperation operator operand1 operand2 hasParens))
+                          (createRefutationTree operand1 False)
+                          (createRefutationTree (negateNode operand2) False)
+                          Nothing Nothing)
+      "&"  -> Just (NodeC (negateNode (BinaryOperation operator operand1 operand2 hasParens))
+                          (createRefutationTree (negateNode operand1) False)
+                          (createRefutationTree (negateNode operand2) False)
+                          Nothing Nothing)
+      "|"  -> Just (NodeC (negateNode (BinaryOperation operator operand1 operand2 hasParens))
+                          (createRefutationTree (negateNode operand1) False)
+                          (createRefutationTree (negateNode operand2) False)
+                          Nothing Nothing)
+      _    -> Nothing
+  | otherwise = case operator of
+      "->" -> Just (NodeC (BinaryOperation operator operand1 operand2 hasParens)
+                          (createRefutationTree (negateNode operand1) False)
+                          (createRefutationTree operand2 False)
+                          Nothing Nothing)
+      "&"  -> Just (NodeC (BinaryOperation operator operand1 operand2 hasParens)
+                          (createRefutationTree operand1 False)
+                          (createRefutationTree operand2 False)
+                          Nothing Nothing)
+      "|"  -> Just (NodeC (BinaryOperation operator operand1 operand2 hasParens)
+                          (createRefutationTree operand1 False)
+                          (createRefutationTree operand2 False)
+                          Nothing Nothing)
+      _    -> Nothing
+
+instance Show Node where
+  show (BinaryOperation operator operand1 operand2 hasParens) =
+    if hasParens then "(" ++ show operand1 ++ operator ++ show operand2 ++ ")"
+    else show operand1 ++ operator ++ show operand2
+  show (UnaryOperation operator operand hasParens) =
+    if hasParens then "(" ++ operator ++ show operand ++ ")"
+    else operator ++ show operand
+  show (Leaf operand hasParens) =
+    if hasParens then "(" ++ operand ++ ")"
+    else operand
+
+
+instance Show Caralho where
+  show (NodeC node left right third fourth) =
+    "NodeC (" ++ show node ++ ") " ++
+    "(" ++ show left ++ ") " ++
+    "(" ++ show right ++ ") " ++
+    "(" ++ show third ++ ") " ++
+    "(" ++ show fourth ++ ")"
+
+
+-- criando funcao que vai pegar todos os valores de nós folha da operação 1 para comparar com folhas da op 2
+--takeAndCompare :: Node -> Bool -> Node
+
+
+-- \| not hasNot = Case operator of
+-- NodeC Operator (AND node) (AND node) (OR node) (OR node) HasParen
 --------------------------------------------------------------------------------
 
 equation :: String
-equation = "~(p | (q & r)) -> ((p | q) & (p | v))" :: String
-
-
---1. quebrar a stringzona em vários nós folha para fazer a refutação add a mais na árvore
---2. busca por profundidade até achar tabela v f
-
-depthSearch :: Node -> [String]
-depthSearch (Leaf e hashParens) = [e]
-depthSearch (UnaryOperation op node hasParens) = [op] ++ depthSearch node
-depthSearch (BinaryOperation op left right hasParens) = [op] ++ depthSearch left ++ depthSearch right
-
-
--- eq "~(p|(q&r))->((p|q)&(p|v))"
--- ["->","~","|","p","&","q","r","&","|","p","q","|","p","v"]
-
-valida :: Node -> [Bool]
-valida (Leaf _ _) = [True]
-valida (UnaryOperation "~" node _) = False : valida node 
-valida (BinaryOperation op left right _) =
-  case op of
-    "&"   -> (False : valida left) ++ (False : valida right) 
-    "|"   -> (False : valida left) ++ (False : valida right) 
-    "->"  -> (True : valida left) ++ (False : valida right)
-    "<->" -> (False : valida left) ++ (False : valida right) 
-    _     -> error "Operador desconhecido" 
-
-a = "p->p"
-
-
+equation = "(p | (q & r)) -> ((p | q) & (p | r))" :: String
 
 main :: IO ()
 main = do
-  print (trimm equation)
-  let arvore = createSyntaxTree a
-  let arvore_validacao = createSyntaxTree equation 
-  print (printSyntaxTree arvore)
-
-  let result = depthSearch arvore
-  putStrLn "Result Depth-Search:"
-  print result
-
-  let testevalid = valida arvore
-  print (valida arvore)
-  
+  --print (trimm equation)
+  let arvore = createSyntaxTree equation
+  --print (printSyntaxTree arvore)
+  let refutationTree = createRefutationTree arvore False
+  print refutationTree
