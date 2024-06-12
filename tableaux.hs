@@ -172,7 +172,7 @@ isLeaf :: Node -> Bool
 isLeaf (Leaf {}) = True
 isLeaf _ = False
 
-createRefutationNode :: Node -> Bool -> Maybe (Node, Bool) -> Maybe RefutationNode
+createRefutationNode :: Node -> IsNegated -> Maybe (Node, Bool) -> Maybe RefutationNode
 createRefutationNode (UnaryOperation operator operand hasParens) isNegated unappliedRule = createRefutationNode operand (xor True isNegated) unappliedRule -- check
 createRefutationNode (Leaf operand hasParens) isNegated carga
   | isNothing carga = Just (RefLeaf operand Terminal isNegated Nothing Nothing)
@@ -193,6 +193,9 @@ createRefutationNode (BinaryOperation operator operand1 operand2 hasParens) isNe
         (createRefutationNode operand1 (not b1 && False) Nothing) -- refutation node 1
         (createRefutationNode operand2 (not b2 && False) (if transferirCarga then Just (operand1, not b1 && False) else Nothing)) -- refutation node 2
     )
+
+createRefutationTree :: Node -> Maybe RefutationNode
+createRefutationTree arvore = createRefutationNode arvore False Nothing
 
 printRefutationTree :: Maybe RefutationNode -> String
 printRefutationTree (Just (RefNode node t isNeg esq dir)) = show (RefNode node t isNeg esq dir)
@@ -278,27 +281,19 @@ refuta variaveis (RefLeaf valor tipo isNegated left right)
             (fromMaybe (RefNode (Leaf valor False) Terminal isNegated Nothing Nothing) right)
 
 
--- refuta (Just (label, isLabelNeg)) (RefLeaf valor tipo isNegated left right)
---   | tipo == Dysjunction = do
---       if label == valor 
---         then not xor isLabelNeg isNegated 
---         else refuta (Just (label, isLabelNeg)) left && refuta (Just (label, isLabelNeg)) right
---   | tipo == Conjunction = do
---       refuta (Just (label, isLabelNeg)) left || refuta (Just (label, isLabelNeg)) right
---   | tipo == Terminal = do
-
--- refuta Nothing (Just (RefLeaf valor tipo isNegated left right)
-
-
 --------------------------------------------------------------------------------
 
 equation :: String
--- equation = "(p | (q & r)) -> ((p | q) & (p | r))" :: String
-equation = "(p -> q)" :: String
+equation = "(p | (q & r)) -> ((p | q) & (p | r))" :: String
+-- equation = "(p -> q)" :: String
 
 main :: IO ()
 main = do
   let arvore = createSyntaxTree equation
   -- print (printSyntaxTree arvore)
-  let refutationTree = createRefutationNode arvore False Nothing
-  putStrLn (printRefutationTree refutationTree)
+  let refutationTree = createRefutationTree arvore
+  print (show refutationTree)
+  -- case refutationTree of
+  --   Nothing -> print ("Entrada Invalida") 
+  --   Just refutationTree -> print (show (refuta [] refutationTree)) 
+  
