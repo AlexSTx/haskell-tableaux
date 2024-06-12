@@ -1,7 +1,10 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant if" #-}
+{-# HLINT ignore "Redundant bracket" #-}
 import Data.Binary (Binary)
 import Data.Char (isAlpha, isSpace)
 import Data.List (find, isPrefixOf, stripPrefix)
-import Data.Maybe
+import Data.Maybe (maybe, isNothing, isJust)
 import Language.Haskell.TH.Ppr (hashParens)
 
 operators :: [String]
@@ -199,15 +202,93 @@ printRefutationTree (Just (RefNode node t isNeg esq dir)) = show (RefNode node t
 --   | RefLeaf String Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
 --   deriving (Show, Eq)
 
-refuta :: Maybe (String, IsNegated) -> RefutationNode -> Bool
-refuta (Just(label, isLabelNeg)) (Just (RefNode node tipo isNegated left right))
-  | tipo == Dysjunction = refuta (Just (label, isLabelNeg)) left && refuta (Just (label, isLabelNeg)) right
-  | tipo == Conjunction = refuta (Just (label, isLabelNeg)) left || refuta (Just (label, isLabelNeg)) right
+-- type IsNegated = Bool
+
+
+-- Função auxiliar fromMaybe
+fromMaybe :: a -> Maybe a -> a
+fromMaybe defval Nothing = defval
+fromMaybe _ (Just val) = val
+
+refuta :: [(String, IsNegated)] -> RefutationNode -> Bool
+refuta variaveis (RefNode node tipo isNegated left right)
+  | tipo == Dysjunction = refuta
+                            variaveis
+                            (fromMaybe (RefNode node Terminal isNegated Nothing Nothing) left)
+                          &&
+                          refuta
+                            variaveis
+                            (fromMaybe (RefNode node Terminal isNegated Nothing Nothing) right)
+  | tipo == Conjunction = refuta
+                            variaveis
+                            (fromMaybe (RefNode node Terminal isNegated Nothing Nothing) left)
+                          ||
+                          refuta
+                            variaveis
+                            (fromMaybe (RefNode node Terminal isNegated Nothing Nothing) right)
   | otherwise = error "Invalid Tree"
-refuta (Just (label, isLabelNeg)) (Just (RefLeaf valor tipo isNegated left right))
+refuta [] (RefLeaf valor tipo isNegated left right)
+  | tipo == Terminal = False -- check
   | tipo == Dysjunction = do
-      refuta (Just (label, isLabelNeg)) left && refuta (Just (label, isLabelNeg)) right
-  
+      refuta
+        [(valor, isNegated)]
+        (fromMaybe (RefNode (Leaf valor False)  Terminal isNegated Nothing Nothing) left)
+      &&
+      refuta
+        [(valor, isNegated)]
+        (fromMaybe (RefNode (Leaf valor False) Terminal isNegated Nothing Nothing) right)
+  | tipo == Conjunction = do
+      refuta
+        [(valor, isNegated)]
+        (fromMaybe (RefNode (Leaf valor False) Terminal isNegated Nothing Nothing) left)
+      ||
+      refuta
+        [(valor, isNegated)]
+        (fromMaybe (RefNode (Leaf valor False) Terminal isNegated Nothing Nothing) right)
+
+refuta variaveis (RefLeaf valor tipo isNegated left right)
+  | tipo == Terminal = do
+    let valorRecebido = lookup valor variaveis
+    if (isNothing valorRecebido || ((isJust valorRecebido) && xor (fromMaybe False valorRecebido) isNegated)) then True else False
+
+    --  variaveis ++ (valor, isNegated)
+  | tipo == Dysjunction = do
+      let valorRecebido = lookup valor variaveis
+      if (isNothing valorRecebido || ((isJust valorRecebido) && xor (fromMaybe False valorRecebido) isNegated))
+        then True
+        else 
+          refuta
+            (variaveis ++ [(valor, isNegated)])
+            (fromMaybe (RefNode (Leaf valor False)  Terminal isNegated Nothing Nothing) left)
+          &&
+          refuta
+            (variaveis ++ [(valor, isNegated)])
+            (fromMaybe (RefNode (Leaf valor False) Terminal isNegated Nothing Nothing) right)
+  | tipo == Conjunction = do
+      let valorRecebido = lookup valor variaveis
+      if (isNothing valorRecebido || ((isJust valorRecebido) && xor (fromMaybe False valorRecebido) isNegated))
+        then True
+        else 
+          refuta
+            (variaveis ++ [(valor, isNegated)])
+            (fromMaybe (RefNode (Leaf valor False)  Terminal isNegated Nothing Nothing) left)
+          ||
+          refuta
+            (variaveis ++ [(valor, isNegated)])
+            (fromMaybe (RefNode (Leaf valor False) Terminal isNegated Nothing Nothing) right)
+
+
+-- refuta (Just (label, isLabelNeg)) (RefLeaf valor tipo isNegated left right)
+--   | tipo == Dysjunction = do
+--       if label == valor 
+--         then not xor isLabelNeg isNegated 
+--         else refuta (Just (label, isLabelNeg)) left && refuta (Just (label, isLabelNeg)) right
+--   | tipo == Conjunction = do
+--       refuta (Just (label, isLabelNeg)) left || refuta (Just (label, isLabelNeg)) right
+--   | tipo == Terminal = do
+
+-- refuta Nothing (Just (RefLeaf valor tipo isNegated left right)
+
 
 --------------------------------------------------------------------------------
 
