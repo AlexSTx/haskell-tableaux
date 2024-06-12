@@ -137,6 +137,7 @@ xor p q = (p && not q) || (not p && q)
 -- caralho taNegado node resto =
 
 data Type = Dysjunction | Conjunction | Terminal
+  deriving (Show, Eq)
 
 getType :: Operator -> IsNegated -> Type
 getType op isNeg
@@ -151,123 +152,70 @@ getType op isNeg
       "/" -> Dysjunction
       _ -> Terminal
 
+-- ESSES BOOLS AQUI NÃO SÃO SE TÁ NEGADO, SÃO O VALOR OFICIAL
+getTypeData :: Operator -> IsNegated -> (Type, Bool, Bool)
+getTypeData op isNeg
+  | isNeg = case op of
+      "->" -> (Conjunction, True, False)
+      "&" -> (Dysjunction, False, False)
+      "/" -> (Conjunction, False, False)
+      _ -> (Terminal, False, False)
+  | not isNeg = case op of
+      "->" -> (Dysjunction, False, True)
+      "&" -> (Conjunction, True, True)
+      "/" -> (Dysjunction, True, True)
+      _ -> (Terminal, False, False)
+
 type IsNegated = Bool
 
 data RefutationNode
   = RefNode Node Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
   | RefLeaf String Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
+  deriving (Show, Eq)
 
-getNodeInfo :: Node -> (Operator, Node, Node)
-getNodeInfo (BinaryOperation operator first second _) = (operator, first, second)
-getNodeInfo _ = error "Invalid Node Type"
+getInfoCarga :: Node -> (Operator, Node, Node)
+getInfoCarga (BinaryOperation operator first second _) = (operator, first, second)
+getInfoCarga (UnaryOperation {}) = error "Invalid Node Type - Unary"
+getInfoCarga (Leaf {}) = error "Invalid Node Type - Leaf"
 
-createRefutationTree :: Node -> Bool -> Maybe Node -> Maybe RefutationNode
-createRefutationTree (UnaryOperation operator operand hasParens) isNegated unappliedRule = createRefutationTree operand (xor True isNegated) unappliedRule -- check
-createRefutationTree (Leaf operand hasParens) isNegated unappliedRule
-  | isNothing unappliedRule = Just (RefLeaf operand Terminal isNegated Nothing Nothing)
-  | isJust unappliedRule =
+isLeaf :: Node -> Bool
+isLeaf (Leaf {}) = True
+isLeaf _ = False
+
+createRefutationNode :: Node -> Bool -> Maybe (Node, Bool) -> Maybe RefutationNode
+createRefutationNode (UnaryOperation operator operand hasParens) isNegated unappliedRule = createRefutationNode operand (xor True isNegated) unappliedRule -- check
+createRefutationNode (Leaf operand hasParens) isNegated carga
+  | isNothing carga = Just (RefLeaf operand Terminal isNegated Nothing Nothing)
+  | isJust carga =
       do
-        (operator, first, second) <- case unappliedRule of
-          Just node -> return (getNodeInfo node)
+        ((operator, first, second), negadoCarga) <- case carga of
+          Just (node, negadoCarga) -> return (getInfoCarga node, negadoCarga)
           Nothing -> error "Expected a Node, but got Nothing"
+        Just (RefLeaf operand (getType operator negadoCarga) isNegated (createRefutationNode first False Nothing) (createRefutationNode second False Nothing))
+createRefutationNode (BinaryOperation operator operand1 operand2 hasParens) isNegated unappliedRule = do
+  let (tipo, b1, b2) = getTypeData operator isNegated
+  let transferirCarga = tipo == Dysjunction && not (isLeaf operand1)
+  Just
+    ( RefNode
+        (BinaryOperation operator operand1 operand2 hasParens) -- node
+        tipo -- type
+        (xor True isNegated) -- isNegated
+        (createRefutationNode operand1 (not b1 && False) Nothing) -- refutation node 1
+        (createRefutationNode operand2 (not b2 && False) (if transferirCarga then Just (operand1, not b1 && False) else Nothing)) -- refutation node 2
+    )
 
-        Just (RefLeaf operand (getType operator isNegated) isNegated (createRefutationTree first False Nothing) (createRefutationTree second False Nothing))
+printRefutationTree :: Maybe RefutationNode -> String
+printRefutationTree (Just (RefNode node t isNeg esq dir)) = show (RefNode node t isNeg esq dir)
 
--- createRefutationTree (BinaryOperation operator operand1 operand2 hasParens) isNegated unappliedRule =
-
--- createRefutationTree (BinaryOperation operator operand1 operand2 hasParens) hasNot
---   | hasNot = case operator of
---       "->" ->
---         Just
---           ( NodeC
---               (negateNode (BinaryOperation operator operand1 operand2 hasParens))
---               (createRefutationTree operand1 False)
---               (createRefutationTree (negateNode operand2) False)
---           )
---       "&" ->
---         Just
---           ( NodeC
---               (negateNode (BinaryOperation operator operand1 operand2 hasParens))
---               (createRefutationTree (negateNode operand1) False)
---               (createRefutationTree (negateNode operand2) False)
---           )
---       "|" ->
---         Just
---           ( NodeC
---               (negateNode (BinaryOperation operator operand1 operand2 hasParens))
---               (createRefutationTree (negateNode operand1) False)
---           )
---       _ -> Nothing
---   | otherwise = case operator of
---       "->" ->
---         Just
---           ( NodeC
---               (BinaryOperation operator operand1 operand2 hasParens)
---               (createRefutationTree (negateNode operand1) False)
---               (createRefutationTree operand2 False)
---           )
---       "&" ->
---         Just
---           ( NodeC
---               (BinaryOperation operator operand1 operand2 hasParens)
---               (createRefutationTree operand1 False)
---               (createRefutationTree operand2 False)
---           )
---       "|" ->
---         Just
---           ( NodeC
---               (BinaryOperation operator operand1 operand2 hasParens)
---               (createRefutationTree operand1 False)
---               (createRefutationTree operand2 False)
---           )
---       _ -> Nothing
-
--- instance Show Node where
---   show (BinaryOperation operator operand1 operand2 hasParens) =
---     if hasParens
---       then "(" ++ show operand1 ++ operator ++ show operand2 ++ ")"
---       else show operand1 ++ operator ++ show operand2
---   show (UnaryOperation operator operand hasParens) =
---     if hasParens
---       then "(" ++ operator ++ show operand ++ ")"
---       else operator ++ show operand
---   show (Leaf operand hasParens) =
---     if hasParens
---       then "(" ++ operand ++ ")"
---       else operand
-
--- instance Show RefutationNode where
---   show (NodeC node left right third fourth) =
---     "NodeC ("
---       ++ show node
---       ++ ") "
---       ++ "("
---       ++ show left
---       ++ ") "
---       ++ "("
---       ++ show right
---       ++ ") "
---       ++ "("
---       ++ show third
---       ++ ") "
---       ++ "("
---       ++ show fourth
---       ++ ")"
-
--- criando funcao que vai pegar todos os valores de nós folha da operação 1 para comparar com folhas da op 2
--- takeAndCompare :: Node -> Bool -> Node
-
--- \| not hasNot = Case operator of
--- NodeC Operator (AND node) (AND node) (OR node) (OR node) HasParen
 --------------------------------------------------------------------------------
 
--- equation :: String
+equation :: String
 -- equation = "(p | (q & r)) -> ((p | q) & (p | r))" :: String
+equation = "(p -> q)" :: String
 
--- main :: IO ()
--- main = do
---   -- print (trimm equation)
---   let arvore = createSyntaxTree equation
---   -- print (printSyntaxTree arvore)
---   let refutationTree = createRefutationTree arvore False
---   print refutationTree
+main :: IO ()
+main = do
+  let arvore = createSyntaxTree equation
+  -- print (printSyntaxTree arvore)
+  let refutationTree = createRefutationNode arvore False Nothing
+  putStrLn (printRefutationTree refutationTree)
