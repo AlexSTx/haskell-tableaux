@@ -1,3 +1,4 @@
+import Data.Binary (Binary)
 import Data.Char (isAlpha, isSpace)
 import Data.List (find, isPrefixOf, stripPrefix)
 import Data.Maybe
@@ -14,6 +15,7 @@ data Node
   = BinaryOperation Operator Node Node HasParens
   | UnaryOperation Operator Node HasParens
   | Leaf String HasParens
+  deriving (Show, Eq)
 
 trimm :: String -> String
 trimm = filter (not . isSpace)
@@ -155,19 +157,23 @@ data RefutationNode
   = RefNode Node Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
   | RefLeaf String Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
 
+getNodeInfo :: Node -> (Operator, Node, Node)
+getNodeInfo (BinaryOperation operator first second _) = (operator, first, second)
+getNodeInfo _ = error "Invalid Node Type"
+
 createRefutationTree :: Node -> Bool -> Maybe Node -> Maybe RefutationNode
 createRefutationTree (UnaryOperation operator operand hasParens) isNegated unappliedRule = createRefutationTree operand (xor True isNegated) unappliedRule -- check
 createRefutationTree (Leaf operand hasParens) isNegated unappliedRule
   | isNothing unappliedRule = Just (RefLeaf operand Terminal isNegated Nothing Nothing)
-  | isJust unappliedRule = do
-      let unappliedTree = case unappliedRule of
-            Just node -> createRefutationTree node False Nothing
-            Nothing -> error "Expected a Node, but got Nothing"
-          (nodeType, first, second) = case unappliedTree of
-            Just (RefLeaf _ type' _ first' second') -> (type', first', second')
-            Just (RefNode _ type' _ first' second') -> (type', first', second')
-            Nothing -> error "Expected a Node, but got Nothing"
-      Just (RefLeaf operand nodeType isNegated first second)
+  | isJust unappliedRule =
+      do
+        (operator, first, second) <- case unappliedRule of
+          Just node -> return (getNodeInfo node)
+          Nothing -> error "Expected a Node, but got Nothing"
+
+        Just (RefLeaf operand (getType operator isNegated) isNegated (createRefutationTree first False Nothing) (createRefutationTree second False Nothing))
+
+-- createRefutationTree (BinaryOperation operator operand1 operand2 hasParens) isNegated unappliedRule =
 
 -- createRefutationTree (BinaryOperation operator operand1 operand2 hasParens) hasNot
 --   | hasNot = case operator of
@@ -255,13 +261,13 @@ createRefutationTree (Leaf operand hasParens) isNegated unappliedRule
 -- NodeC Operator (AND node) (AND node) (OR node) (OR node) HasParen
 --------------------------------------------------------------------------------
 
-equation :: String
-equation = "(p | (q & r)) -> ((p | q) & (p | r))" :: String
+-- equation :: String
+-- equation = "(p | (q & r)) -> ((p | q) & (p | r))" :: String
 
-main :: IO ()
-main = do
-  -- print (trimm equation)
-  let arvore = createSyntaxTree equation
-  -- print (printSyntaxTree arvore)
-  let refutationTree = createRefutationTree arvore False
-  print refutationTree
+-- main :: IO ()
+-- main = do
+--   -- print (trimm equation)
+--   let arvore = createSyntaxTree equation
+--   -- print (printSyntaxTree arvore)
+--   let refutationTree = createRefutationTree arvore False
+--   print refutationTree
