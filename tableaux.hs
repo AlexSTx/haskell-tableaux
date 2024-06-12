@@ -122,19 +122,6 @@ negateNode (Leaf operand hasParens) = UnaryOperation "~" (Leaf operand hasParens
 xor :: Bool -> Bool -> Bool
 xor p q = (p && not q) || (not p && q)
 
--- type IsNegated = Bool
-
--- data LogicNode
---   = LogicOperation Operator Node Node HasParens IsNegated
---   | LogicLeaf String HasParens IsNegated
-
--- convertToLogicTree :: Node -> IsNegated -> LogicNode
--- convertToLogicTree (Leaf operand hasParens) isNegated = LogicLeaf operand hasParens (xor False isNegated)
--- convertToLogicTree (BinaryOperation operator operand1 operand2 hasParens) isNegated = LogicOperation operator operand1 operand2 hasParens (xor False isNegated)
--- convertToLogicTree (UnaryOperation operator operand hasParens) isNegated = convertToLogicTree operand (xor True isNegated)
-
--- caralho :: Bool -> Node -> Maybe Node -> Node
--- caralho taNegado node resto =
 
 data Type = Dysjunction | Conjunction | Terminal
   deriving (Show, Eq)
@@ -206,6 +193,21 @@ createRefutationNode (BinaryOperation operator operand1 operand2 hasParens) isNe
 
 printRefutationTree :: Maybe RefutationNode -> String
 printRefutationTree (Just (RefNode node t isNeg esq dir)) = show (RefNode node t isNeg esq dir)
+
+-- data RefutationNode
+--   = RefNode Node Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
+--   | RefLeaf String Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
+--   deriving (Show, Eq)
+
+refuta :: Maybe (String, IsNegated) -> RefutationNode -> Bool
+refuta (Just(label, isLabelNeg)) (Just (RefNode node tipo isNegated left right))
+  | tipo == Dysjunction = refuta (Just (label, isLabelNeg)) left && refuta (Just (label, isLabelNeg)) right
+  | tipo == Conjunction = refuta (Just (label, isLabelNeg)) left || refuta (Just (label, isLabelNeg)) right
+  | otherwise = error "Invalid Tree"
+refuta (Just (label, isLabelNeg)) (Just (RefLeaf valor tipo isNegated left right))
+  | tipo == Dysjunction = do
+      refuta (Just (label, isLabelNeg)) left && refuta (Just (label, isLabelNeg)) right
+  
 
 --------------------------------------------------------------------------------
 
