@@ -1,5 +1,6 @@
 import Data.Char (isAlpha, isSpace)
 import Data.List (find, isPrefixOf, stripPrefix)
+import Data.Maybe
 import Language.Haskell.TH.Ppr (hashParens)
 
 operators :: [String]
@@ -133,7 +134,20 @@ xor p q = (p && not q) || (not p && q)
 -- caralho :: Bool -> Node -> Maybe Node -> Node
 -- caralho taNegado node resto =
 
-data Type = Dysjunction | Conjunction
+data Type = Dysjunction | Conjunction | Terminal
+
+getType :: Operator -> IsNegated -> Type
+getType op isNeg
+  | isNeg = case op of
+      "->" -> Conjunction
+      "&" -> Dysjunction
+      "/" -> Conjunction
+      _ -> Terminal
+  | not isNeg = case op of
+      "->" -> Dysjunction
+      "&" -> Conjunction
+      "/" -> Dysjunction
+      _ -> Terminal
 
 type IsNegated = Bool
 
@@ -143,9 +157,17 @@ data RefutationNode
 
 createRefutationTree :: Node -> Bool -> Maybe Node -> Maybe RefutationNode
 createRefutationTree (UnaryOperation operator operand hasParens) isNegated unappliedRule = createRefutationTree operand (xor True isNegated) unappliedRule -- check
-createRefutationTree (Leaf operand hasParens) isNegated unappliedRule = do 
-  unappliedTree = createRefutationTree unappliedRule False Nothing
-  Just (RefLeaf operand isNegated )
+createRefutationTree (Leaf operand hasParens) isNegated unappliedRule
+  | isNothing unappliedRule = Just (RefLeaf operand Terminal isNegated Nothing Nothing)
+  | isJust unappliedRule = do
+      let unappliedTree = case unappliedRule of
+            Just node -> createRefutationTree node False Nothing
+            Nothing -> error "Expected a Node, but got Nothing"
+          (nodeType, first, second) = case unappliedTree of
+            Just (RefLeaf _ type' _ first' second') -> (type', first', second')
+            Just (RefNode _ type' _ first' second') -> (type', first', second')
+            Nothing -> error "Expected a Node, but got Nothing"
+      Just (RefLeaf operand nodeType isNegated first second)
 
 -- createRefutationTree (BinaryOperation operator operand1 operand2 hasParens) hasNot
 --   | hasNot = case operator of
