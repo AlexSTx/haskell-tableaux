@@ -209,7 +209,7 @@ createRefutationNode (Just (Leaf operand _)) isNegated carga
           fromMaybe (error "Carga Invalida") currentCarga
     let (operator, left, right) = pegarCarga nodeCarga
     let (tipo, isLeftNegated, isRightNegated) =
-          getTypeData operator (not isCargaNegated)
+          getTypeData operator isCargaNegated
     Just
       (RefLeaf
          operand
@@ -222,17 +222,20 @@ createRefutationNode
   isNegated
   unappliedRule = do
   let (tipo, b1, b2) = getTypeData operator isNegated
-  let transferirCarga = tipo == Conjunction
+  let a = isLeaf operand1
   Just
     (RefNode
        (BinaryOperation operator operand1 operand2 hasParens) -- node
        tipo -- type
        isNegated -- isNegated
-       (createRefutationNode (Just operand1) b1 (unappliedRule)) -- refutation node 1
+       (if (isLeaf operand1 || (tipo /= Conjunction))
+        then (createRefutationNode (Just operand1) b1 (unappliedRule))
+        else (Just (RefNode operand1 Terminal b1 Nothing Nothing)))
+        -- refutation node 1
        (createRefutationNode
           (Just operand2)
           b2
-          (if transferirCarga
+          (if tipo == Conjunction
            then (unappliedRule ++ [Just (operand1, b1)])
            else unappliedRule)) -- refutation node 2
      )
@@ -347,16 +350,10 @@ smol = Just
               (Leaf "p" False)
               (BinaryOperation "&" (Leaf "q" False) (Leaf "r" False) True)
               True)
-           Dysjunction
+           Terminal
            False
-           (Just (RefLeaf "p" Terminal False Nothing Nothing))
-           (Just
-              (RefNode
-                 (BinaryOperation "&" (Leaf "q" False) (Leaf "r" False) True)
-                 Conjunction
-                 False
-                 (Just (RefLeaf "q" Terminal False Nothing Nothing))
-                 (Just (RefLeaf "r" Terminal False Nothing Nothing))))))
+           Nothing
+           Nothing))
      (Just
         (RefNode
            (BinaryOperation
@@ -374,9 +371,9 @@ smol = Just
                  (Just
                     (RefLeaf
                        "p"
-                       Conjunction
+                       Dysjunction
                        True
-                       (Just (RefLeaf "p" Terminal True Nothing Nothing))
+                       (Just (RefLeaf "p" Terminal False Nothing Nothing))
                        (Just
                           (RefNode
                              (BinaryOperation
@@ -384,16 +381,16 @@ smol = Just
                                 (Leaf "q" False)
                                 (Leaf "r" False)
                                 True)
-                             Dysjunction
-                             True
-                             (Just (RefLeaf "q" Terminal True Nothing Nothing))
-                             (Just (RefLeaf "r" Terminal True Nothing Nothing))))))
+                             Conjunction
+                             False
+                             (Just (RefLeaf "q" Terminal False Nothing Nothing))
+                             (Just (RefLeaf "r" Terminal False Nothing Nothing))))))
                  (Just
                     (RefLeaf
                        "q"
-                       Conjunction
+                       Dysjunction
                        True
-                       (Just (RefLeaf "p" Terminal True Nothing Nothing))
+                       (Just (RefLeaf "p" Terminal False Nothing Nothing))
                        (Just
                           (RefNode
                              (BinaryOperation
@@ -401,10 +398,10 @@ smol = Just
                                 (Leaf "q" False)
                                 (Leaf "r" False)
                                 True)
-                             Dysjunction
-                             True
-                             (Just (RefLeaf "q" Terminal True Nothing Nothing))
-                             (Just (RefLeaf "r" Terminal True Nothing Nothing))))))))
+                             Conjunction
+                             False
+                             (Just (RefLeaf "q" Terminal False Nothing Nothing))
+                             (Just (RefLeaf "r" Terminal False Nothing Nothing))))))))
            (Just
               (RefNode
                  (BinaryOperation "|" (Leaf "p" False) (Leaf "r" False) True)
@@ -413,9 +410,9 @@ smol = Just
                  (Just
                     (RefLeaf
                        "p"
-                       Conjunction
+                       Dysjunction
                        True
-                       (Just (RefLeaf "p" Terminal True Nothing Nothing))
+                       (Just (RefLeaf "p" Terminal False Nothing Nothing))
                        (Just
                           (RefNode
                              (BinaryOperation
@@ -423,16 +420,16 @@ smol = Just
                                 (Leaf "q" False)
                                 (Leaf "r" False)
                                 True)
-                             Dysjunction
-                             True
-                             (Just (RefLeaf "q" Terminal True Nothing Nothing))
-                             (Just (RefLeaf "r" Terminal True Nothing Nothing))))))
+                             Conjunction
+                             False
+                             (Just (RefLeaf "q" Terminal False Nothing Nothing))
+                             (Just (RefLeaf "r" Terminal False Nothing Nothing))))))
                  (Just
                     (RefLeaf
                        "r"
-                       Conjunction
+                       Dysjunction
                        True
-                       (Just (RefLeaf "p" Terminal True Nothing Nothing))
+                       (Just (RefLeaf "p" Terminal False Nothing Nothing))
                        (Just
                           (RefNode
                              (BinaryOperation
@@ -440,10 +437,10 @@ smol = Just
                                 (Leaf "q" False)
                                 (Leaf "r" False)
                                 True)
-                             Dysjunction
-                             True
-                             (Just (RefLeaf "q" Terminal True Nothing Nothing))
-                             (Just (RefLeaf "r" Terminal True Nothing Nothing)))))))))))
+                             Conjunction
+                             False
+                             (Just (RefLeaf "q" Terminal False Nothing Nothing))
+                             (Just (RefLeaf "r" Terminal False Nothing Nothing)))))))))))
 
 equation :: String
 equation = "(p | (q & r)) -> ((p | q) & (p | r))" :: String
@@ -461,9 +458,9 @@ main = do
   print (printSyntaxTree arvore)
   let refutationTree = createRefutationTree (arvore)
   print (show refutationTree)
-  case refutationTree of
-    Nothing -> print ("Entrada Invalida")
-    Just refutationTree -> print (show (refuta [] refutationTree))
+-- case refutationTree of
+--   Nothing -> print ("Entrada Invalida")
+--   Just refutationTree -> print (show (refuta [] refutationTree))
 
 -- desempilhar regras
 -- descobrir por que regras não tão passando pra esquerda
