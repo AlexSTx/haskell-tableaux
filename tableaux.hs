@@ -129,31 +129,17 @@ xor p q = (p && not q) || (not p && q)
 data Type = Dysjunction | Conjunction | Terminal
   deriving (Show, Eq)
 
-getType :: Operator -> IsNegated -> Type
-getType op isNeg
-  | isNeg = case op of
-      "->" -> Conjunction
-      "&" -> Dysjunction
-      "|" -> Conjunction
-      _ -> Terminal
-  | not isNeg = case op of
-      "->" -> Dysjunction
-      "&" -> Conjunction
-      "|" -> Dysjunction
-      _ -> Terminal
-
--- ESSES BOOLS AQUI NÃO SÃO SE TÁ NEGADO, SÃO O VALOR OFICIAL
-getTypeData :: Operator -> IsNegated -> (Type, Bool, Bool)
+getTypeData :: Operator -> IsNegated -> (Type, IsNegated, IsNegated)
 getTypeData op isNeg
   | isNeg = case op of
-      "->" -> (Conjunction, True, False)
-      "&" -> (Dysjunction, False, False)
-      "|" -> (Conjunction, False, False)
-      _ -> (Terminal, False, False)
+      "->" -> (Conjunction, False, True)
+      "&" -> (Dysjunction, True, True)
+      "|" -> (Conjunction, True, True)
+      _ -> (Terminal, True, True)
   | not isNeg = case op of
-      "->" -> (Dysjunction, False, True)
-      "&" -> (Conjunction, True, True)
-      "|" -> (Dysjunction, True, True)
+      "->" -> (Dysjunction, True, False)
+      "&" -> (Conjunction, False, False)
+      "|" -> (Dysjunction, False, False)
       _ -> (Terminal, False, False)
 
 type IsNegated = Bool
@@ -180,13 +166,15 @@ createRefutationNode (Just (Leaf operand hasParens)) isNegated carga
   | isJust carga =
       do
         ((operator, first, second), cargaNegada) <- case carga of
-          Just (node, cargaNegada) -> return (getInfoCarga node, cargaNegada) -- nao ta recebendo carga
+          Just (node, cargaNegada) -> return (getInfoCarga node, cargaNegada)
           Nothing -> error "Expected a Node, but got Nothing"
+
+        let (tipo, _, _) = getTypeData operator (not cargaNegada)
 
         Just
           ( RefLeaf
               operand
-              (getType operator (not cargaNegada))
+              tipo
               isNegated
               (createRefutationNode first False Nothing)
               (createRefutationNode second False Nothing)
@@ -199,8 +187,8 @@ createRefutationNode (Just (BinaryOperation operator operand1 operand2 hasParens
         (BinaryOperation operator operand1 operand2 hasParens) -- node
         tipo -- type
         isNegated -- isNegated
-        (createRefutationNode (Just operand1) (not b1) Nothing) -- refutation node 1
-        (createRefutationNode (Just operand2) (not b2) (if transferirCarga then Just (operand1, not b1) else Nothing)) -- refutation node 2
+        (createRefutationNode (Just operand1) b1 Nothing) -- refutation node 1
+        (createRefutationNode (Just operand2) b2 (if transferirCarga then Just (operand1, not b1) else Nothing)) -- refutation node 2
     )
 
 createRefutationTree :: Node -> Maybe RefutationNode
@@ -385,6 +373,7 @@ main = do
     Nothing -> print ("Entrada Invalida")
     Just refutationTree -> print (show (refuta [] refutationTree))
 
+smol :: Maybe RefutationNode
 smol =
   Just
     ( RefNode
