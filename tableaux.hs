@@ -304,7 +304,7 @@ refuta [] (Just (RefLeaf valor tipo isNegated left right))
                                         then varLeft
                                         else [("", False)]
     if (valor == operand && isNegated == isOperandNegated)
-      then True
+      then True -- TODO: talvez tenha um bug aqui
       else trace
         ("[] " ++ valor ++ " " ++ (show isNegated))
         (refuta ((valor, isNegated):varLeft) right)
