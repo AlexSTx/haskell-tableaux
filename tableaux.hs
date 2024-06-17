@@ -298,9 +298,16 @@ refuta [] (Just (RefLeaf valor tipo isNegated left right))
   | tipo == Dysjunction = trace
     ("[] " ++ valor ++ " " ++ (show isNegated))
     (refuta [(valor, isNegated)] left && refuta [(valor, isNegated)] right)
-  | tipo == Conjunction = trace
-    ("[] " ++ valor ++ " " ++ (show isNegated))
-    (refuta ((valor, isNegated):getVariableRefLeaf left) right)
+  | tipo == Conjunction = do
+    let varLeft = getVariableRefLeaf left
+    let [(operand, isOperandNegated)] = if (not (null varLeft))
+                                        then varLeft
+                                        else [("", False)]
+    if (valor == operand && isNegated == isOperandNegated)
+      then True
+      else trace
+        ("[] " ++ valor ++ " " ++ (show isNegated))
+        (refuta ((valor, isNegated):varLeft) right)
 refuta variaveis (Just (RefLeaf valor tipo isNegated left right))
   | tipo == Terminal = do
     let valorRecebido = lookup valor variaveis
