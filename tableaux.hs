@@ -145,7 +145,6 @@ negateNode (Leaf operand hasParens) =
 xor :: Bool -> Bool -> Bool
 xor p q = (p && not q) || (not p && q)
 
--- Função auxiliar fromMaybe
 fromMaybe :: a -> Maybe a -> a
 fromMaybe defval Nothing = defval
 fromMaybe _ (Just val) = val
@@ -263,6 +262,7 @@ type FoundContradiction = Bool
 
 type VariableList = [(String, IsNegated)]
 
+invalidRefNode :: RefutationNode
 invalidRefNode = RefNode (Leaf "a" False) Terminal False Nothing Nothing -- RefNode Terminal é invalido
 
 isRefLeaf :: RefutationNode -> Bool
@@ -275,40 +275,64 @@ getVariableRefLeaf (Just (RefLeaf operand _ isNegated _ _)) =
 getVariableRefLeaf _ = []
 
 refuta :: VariableList -> Maybe RefutationNode -> FoundContradiction
-refuta _ Nothing = trace " - Nothing - " False
-refuta _ (Just (RefNode _ Terminal _ _ _)) = trace " - Node Terminal - " False
+refuta _ Nothing = trace "Nothing" False
+refuta _ (Just (RefNode _ Terminal _ _ _)) = trace "Terminal Node" False
 refuta variaveis (Just (RefNode node tipo isNegated left right))
-  | tipo == Dysjunction = (refuta variaveis left) && (refuta variaveis right)
+  | tipo == Dysjunction = trace
+    (show variaveis ++ " " ++ printSyntaxTree node)
+    ((refuta variaveis left) && (refuta variaveis right))
   | tipo == Conjunction = do
-    refuta (variaveis ++ getVariableRefLeaf left) right
+    let varLeft = getVariableRefLeaf left
+    let [(operand, isOperandNegated)] = if (not (null varLeft))
+                                        then varLeft
+                                        else [("", False)]
+    let valorRecebido = lookup operand variaveis
+    if (isNothing valorRecebido
+        || ((isJust valorRecebido) && (valorRecebido == Just isOperandNegated)))
+      then trace
+        (show variaveis ++ " " ++ printSyntaxTree node)
+        (refuta (variaveis ++ varLeft) right)
+      else trace (show variaveis ++ " " ++ printSyntaxTree node) True
 refuta [] (Just (RefLeaf valor tipo isNegated left right))
-  | tipo == Terminal = False
-  | tipo == Dysjunction =
+  | tipo == Terminal = trace "Terminal Leaf" False
+  | tipo == Dysjunction = trace
+    ("[] " ++ valor ++ " " ++ (show isNegated))
     (refuta [(valor, isNegated)] left && refuta [(valor, isNegated)] right)
-  | tipo == Conjunction =
-    refuta ((valor, isNegated):getVariableRefLeaf left) right
+  | tipo == Conjunction = trace
+    ("[] " ++ valor ++ " " ++ (show isNegated))
+    (refuta ((valor, isNegated):getVariableRefLeaf left) right)
 refuta variaveis (Just (RefLeaf valor tipo isNegated left right))
   | tipo == Terminal = do
     let valorRecebido = lookup valor variaveis
     if (isNothing valorRecebido
         || ((isJust valorRecebido) && (valorRecebido == Just isNegated)))
-      then False
-      else True
+      then trace
+        (show variaveis ++ " Terminal " ++ valor ++ " " ++ (show isNegated))
+        False
+      else trace
+        (show variaveis ++ " Terminal " ++ valor ++ " " ++ (show isNegated))
+        True
   | tipo == Dysjunction = do
     let valorRecebido = lookup valor variaveis
     if (isNothing valorRecebido
         || ((isJust valorRecebido) && (valorRecebido == Just isNegated)))
-      then False
-      else (refuta (variaveis ++ [(valor, isNegated)]) left
-            && refuta (variaveis ++ [(valor, isNegated)]) right)
+      then trace
+        (show variaveis ++ " Dysjunction " ++ valor ++ " " ++ (show isNegated))
+        (refuta (variaveis ++ [(valor, isNegated)]) left
+         && refuta (variaveis ++ [(valor, isNegated)]) right)
+      else True
   | tipo == Conjunction = do
     let valorRecebido = lookup valor variaveis
     if (isNothing valorRecebido
         || ((isJust valorRecebido) && (valorRecebido == Just isNegated)))
-      then False
-      else refuta
-        (variaveis ++ [(valor, isNegated)] ++ getVariableRefLeaf left)
-        right
+      then trace
+        (show variaveis ++ " Conjunction " ++ valor ++ " " ++ (show isNegated))
+        (refuta
+           (variaveis ++ [(valor, isNegated)] ++ getVariableRefLeaf left)
+           right)
+      else trace
+        (show variaveis ++ " Conjunction " ++ valor ++ " " ++ (show isNegated))
+        True
 
 --------------------------------------------------------------------------------
 
@@ -415,6 +439,3 @@ main = do
   case refutationTree of
     Nothing -> print ("Entrada Invalida")
     Just refutationTree -> print (show (refuta [] (Just refutationTree)))
-
--- desempilhar regras
--- descobrir por que regras não tão passando pra esquerda
