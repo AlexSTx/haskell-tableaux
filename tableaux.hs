@@ -194,6 +194,10 @@ pegarCarga (Leaf operand _) = (operand, Nothing, Nothing)
 pegarCarga (UnaryOperation operator operand hasParens) =
   (operator, Just operand, Nothing)
 
+getOperandFromLeaf :: Node -> String
+getOperandFromLeaf (Leaf operand _) = operand
+getOperandFromLeaf _ = error "not leaf"
+
 createRefutationNode
   :: Maybe Node -> IsNegated -> UnnapliedRules -> Maybe RefutationNode
 createRefutationNode Nothing _ _ = Nothing
@@ -223,15 +227,22 @@ createRefutationNode
   isNegated
   unappliedRule = do
   let (tipo, b1, b2) = getTypeData operator isNegated
-  let a = isLeaf operand1
   Just
     (RefNode
        (BinaryOperation operator operand1 operand2 hasParens) -- node
        tipo -- type
        isNegated -- isNegated
-       (if (isLeaf operand1 || (tipo /= Conjunction))
+       (if (tipo /= Conjunction)
         then (createRefutationNode (Just operand1) b1 (unappliedRule))
-        else (Just (RefNode operand1 Terminal b1 Nothing Nothing)))
+        else (if (isLeaf operand1)
+              then (Just
+                      (RefLeaf
+                         (getOperandFromLeaf operand1)
+                         Terminal
+                         b1
+                         Nothing
+                         Nothing))
+              else Just (RefNode operand1 Terminal b1 Nothing Nothing)))
         -- refutation node 1
        (createRefutationNode
           (Just operand2)
@@ -267,62 +278,37 @@ refuta :: VariableList -> Maybe RefutationNode -> FoundContradiction
 refuta _ Nothing = trace " - Nothing - " False
 refuta _ (Just (RefNode _ Terminal _ _ _)) = trace " - Node Terminal - " False
 refuta variaveis (Just (RefNode node tipo isNegated left right))
-  | tipo == Dysjunction = trace
-    (printSyntaxTree node ++ " - Dysjunction - " ++ show variaveis)
-    ((refuta variaveis left) && (refuta variaveis right))
+  | tipo == Dysjunction = (refuta variaveis left) && (refuta variaveis right)
   | tipo == Conjunction = do
-    let leftVariable = getVariableRefLeaf left
-    let rightVariable = getVariableRefLeaf right
-    trace
-      (printSyntaxTree node ++ " - Conjunction - " ++ show variaveis)
-      (refuta (variaveis ++ rightVariable) left
-       || refuta (variaveis ++ leftVariable) right)
+    refuta (variaveis ++ getVariableRefLeaf left) right
 refuta [] (Just (RefLeaf valor tipo isNegated left right))
-  | tipo == Terminal = trace (valor ++ " - Folha Terminal - ") False
-  | tipo == Dysjunction = do
-    trace
-      (valor ++ " - Dysjunction - Sem variaveis - ")
-      (refuta [(valor, isNegated)] left && refuta [(valor, isNegated)] right)
-  | tipo == Conjunction = do
-    trace
-      (valor ++ " - Conjunction - Sem variaveis - ")
-      (refuta [(valor, isNegated)] left || refuta [(valor, isNegated)] right)
+  | tipo == Terminal = False
+  | tipo == Dysjunction =
+    (refuta [(valor, isNegated)] left && refuta [(valor, isNegated)] right)
+  | tipo == Conjunction =
+    refuta ((valor, isNegated):getVariableRefLeaf left) right
 refuta variaveis (Just (RefLeaf valor tipo isNegated left right))
   | tipo == Terminal = do
     let valorRecebido = lookup valor variaveis
     if (isNothing valorRecebido
-        || ((isJust valorRecebido)
-            && not (xor (fromMaybe False valorRecebido) isNegated)))
-      then trace
-        (valor ++ " - Terminal - " ++ show variaveis ++ show valorRecebido)
-        False
-      else trace
-        (valor ++ " - Terminal - " ++ show variaveis ++ show valorRecebido)
-        True
+        || ((isJust valorRecebido) && (valorRecebido == Just isNegated)))
+      then False
+      else True
   | tipo == Dysjunction = do
     let valorRecebido = lookup valor variaveis
     if (isNothing valorRecebido
-        || ((isJust valorRecebido)
-            && not (xor (fromMaybe False valorRecebido) isNegated)))
-      then trace
-        (valor ++ " - Dysjunction - " ++ show variaveis ++ show valorRecebido)
-        False
-      else trace
-        (valor ++ " - Dysjunction - " ++ show variaveis ++ show valorRecebido)
-        (refuta (variaveis ++ [(valor, isNegated)]) left
-         && refuta (variaveis ++ [(valor, isNegated)]) right)
+        || ((isJust valorRecebido) && (valorRecebido == Just isNegated)))
+      then False
+      else (refuta (variaveis ++ [(valor, isNegated)]) left
+            && refuta (variaveis ++ [(valor, isNegated)]) right)
   | tipo == Conjunction = do
     let valorRecebido = lookup valor variaveis
     if (isNothing valorRecebido
-        || ((isJust valorRecebido)
-            && not (xor (fromMaybe False valorRecebido) isNegated)))
-      then trace
-        (valor ++ " - Conjunction - " ++ show variaveis ++ show valorRecebido)
-        False
-      else trace
-        (valor ++ " - Conjunction - " ++ show variaveis ++ show valorRecebido)
-        (refuta (variaveis ++ [(valor, isNegated)]) left
-         || refuta (variaveis ++ [(valor, isNegated)]) right)
+        || ((isJust valorRecebido) && (valorRecebido == Just isNegated)))
+      then False
+      else refuta
+        (variaveis ++ [(valor, isNegated)] ++ getVariableRefLeaf left)
+        right
 
 --------------------------------------------------------------------------------
 
@@ -370,23 +356,7 @@ smol = Just
                  (BinaryOperation "|" (Leaf "p" False) (Leaf "q" False) True)
                  Conjunction
                  True
-                 (Just
-                    (RefLeaf
-                       "p"
-                       Dysjunction
-                       True
-                       (Just (RefLeaf "p" Terminal False Nothing Nothing))
-                       (Just
-                          (RefNode
-                             (BinaryOperation
-                                "&"
-                                (Leaf "q" False)
-                                (Leaf "r" False)
-                                True)
-                             Conjunction
-                             False
-                             (Just (RefLeaf "q" Terminal False Nothing Nothing))
-                             (Just (RefLeaf "r" Terminal False Nothing Nothing))))))
+                 (Just (RefLeaf "p" Terminal True Nothing Nothing))
                  (Just
                     (RefLeaf
                        "q"
@@ -409,23 +379,7 @@ smol = Just
                  (BinaryOperation "|" (Leaf "p" False) (Leaf "r" False) True)
                  Conjunction
                  True
-                 (Just
-                    (RefLeaf
-                       "p"
-                       Dysjunction
-                       True
-                       (Just (RefLeaf "p" Terminal False Nothing Nothing))
-                       (Just
-                          (RefNode
-                             (BinaryOperation
-                                "&"
-                                (Leaf "q" False)
-                                (Leaf "r" False)
-                                True)
-                             Conjunction
-                             False
-                             (Just (RefLeaf "q" Terminal False Nothing Nothing))
-                             (Just (RefLeaf "r" Terminal False Nothing Nothing))))))
+                 (Just (RefLeaf "p" Terminal True Nothing Nothing))
                  (Just
                     (RefLeaf
                        "r"
@@ -456,10 +410,8 @@ equation = "(p | (q & r)) -> ((p | q) & (p | r))" :: String
 main :: IO ()
 main = do
   let arvore = negateNode (createSyntaxTree equation)
-  -- print (printSyntaxTree (negateNode arvore))
   print (printSyntaxTree arvore)
   let refutationTree = createRefutationTree (arvore)
-  print (show refutationTree)
   case refutationTree of
     Nothing -> print ("Entrada Invalida")
     Just refutationTree -> print (show (refuta [] (Just refutationTree)))
