@@ -303,8 +303,8 @@ refuta [] (Just (RefLeaf valor tipo isNegated left right))
     let [(operand, isOperandNegated)] = if (not (null varLeft))
                                         then varLeft
                                         else [("", False)]
-    if (valor == operand && isNegated == isOperandNegated)
-      then True -- TODO: talvez tenha um bug aqui
+    if (valor == operand && isNegated /= isOperandNegated)
+      then True 
       else trace
         ("[] " ++ valor ++ " " ++ (show isNegated))
         (refuta ((valor, isNegated):varLeft) right)
