@@ -440,7 +440,8 @@ equation = "(p | (q & r)) -> ((p | q) & (p | r))" :: String
 
 main :: IO ()
 main = do
-  let arvore = negateNode (createSyntaxTree equation)
+  input <- getLine
+  let arvore = negateNode (createSyntaxTree input)
   print (printSyntaxTree arvore)
   let refutationTree = createRefutationTree (arvore)
   case refutationTree of
