@@ -1,13 +1,7 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Redundant if" #-}
-{-# HLINT ignore "Redundant bracket" #-}
-
 import           Data.Binary (Binary)
 import           Data.Char (isAlpha, isSpace)
 import           Data.List (find, isPrefixOf, stripPrefix)
 import           Data.Maybe (isJust, isNothing, maybe)
-import           Data.Tree
 
 operators :: [String]
 operators = ["&", "|", "~", "->", "<->"]
@@ -253,10 +247,6 @@ createRefutationNode
 createRefutationTree :: Node -> Maybe RefutationNode
 createRefutationTree arvore = createRefutationNode (Just arvore) False []
 
--- printRefutationTree :: Maybe RefutationNode -> String
--- printRefutationTree (Just (RefNode node t isNeg esq dir)) = show
---   (RefNode node t isNeg esq dir)
-
 type FoundContradiction = Bool
 
 type VariableList = [(String, IsNegated)]
@@ -319,15 +309,6 @@ refuta variaveis (Just (RefLeaf valor tipo isNegated left right))
               (variaveis ++ [(valor, isNegated)] ++ getVariableRefLeaf left)
               right)
       else True
-
---    RefNode Node Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
-  -- | RefLeaf String Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
-
-
--- printaArvoreRefutacao :: RefutationNode -> Int -> IO ()
--- printaArvoreRefutacao (RefNode equacao Terminal taNegado esq dir) tabs = putStr (repeat tabs "\n") ++ printSyntaxTree equacao
--- printaArvoreRefutacao (RefNode equacao Conjunction taNegado esq dir) tabs = putStr 
--- printaArvoreRefutacao (RefNode equacao Dysjunction taNegado esq dir) tabs =
 
 printRefutationTree :: Maybe RefutationNode -> String
 printRefutationTree (Just node) = go node 0
