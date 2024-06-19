@@ -154,6 +154,8 @@ data Type = Dysjunction
           | Terminal
   deriving (Show, Eq)
 
+type IsNegated = Bool
+
 getTypeData :: Operator -> IsNegated -> (Type, IsNegated, IsNegated)
 getTypeData op isNeg
   | isNeg = case op of
@@ -166,8 +168,6 @@ getTypeData op isNeg
     "&"  -> (Conjunction, False, False)
     "|"  -> (Dysjunction, False, False)
     _    -> (Terminal, False, False)
-
-type IsNegated = Bool
 
 data RefutationNode =
     RefNode Node Type IsNegated (Maybe RefutationNode) (Maybe RefutationNode)
@@ -184,7 +184,7 @@ isLeaf :: Node -> Bool
 isLeaf (Leaf {}) = True
 isLeaf _ = False
 
-type UnnapliedRules = [Maybe (Node, IsNegated)]
+type Carga = [Maybe (Node, IsNegated)]
 
 pegarCarga :: Node -> (String, Maybe Node, Maybe Node)
 pegarCarga (BinaryOperation operator left right _) =
@@ -198,7 +198,7 @@ getOperandFromLeaf (Leaf operand _) = operand
 getOperandFromLeaf _ = error "not leaf"
 
 createRefutationNode
-  :: Maybe Node -> IsNegated -> UnnapliedRules -> Maybe RefutationNode
+  :: Maybe Node -> IsNegated -> Carga -> Maybe RefutationNode
 createRefutationNode Nothing _ _ = Nothing
 createRefutationNode
   (Just (UnaryOperation operator operand _))
@@ -262,9 +262,6 @@ type FoundContradiction = Bool
 
 type VariableList = [(String, IsNegated)]
 
-invalidRefNode :: RefutationNode
-invalidRefNode = RefNode (Leaf "a" False) Terminal False Nothing Nothing -- RefNode Terminal é invalido
-
 isRefLeaf :: RefutationNode -> Bool
 isRefLeaf (RefLeaf {}) = True
 isRefLeaf _ = False
@@ -304,7 +301,7 @@ refuta [] (Just (RefLeaf valor tipo isNegated left right))
                                         then varLeft
                                         else [("", False)]
     if (valor == operand && isNegated /= isOperandNegated)
-      then True 
+      then True
       else trace
         ("[] " ++ valor ++ " " ++ (show isNegated))
         (refuta ((valor, isNegated):varLeft) right)
