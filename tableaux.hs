@@ -339,9 +339,9 @@ main = do
   -- input <- getLine
   let arvore = negateNode (createSyntaxTree equation)
   print (printSyntaxTree arvore)
-  let refutationTree = createRefutationTree (arvore)
+  let refutationTree = createRefutationTree arvore
   case refutationTree of
     -- Nothing -> print ("Entrada Invalida")
     -- Just refutationTree -> print (show (refuta [] (Just refutationTree)))
-    Nothing -> print ("Entrada Invalida")
-    Just refutationTree -> putStr (printRefutationTree (Just refutationTree))
+    Nothing -> print "Entrada Invalida"
+    Just refutationTree -> putStr (printRefutationTree (Just refutationTree) ++ "\n" ++ show (refuta [] (Just refutationTree)))
